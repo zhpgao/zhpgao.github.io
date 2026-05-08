@@ -102,18 +102,13 @@ Cursor 构建系统提示
 - 一个 "request" 内部可能包含 1~25 次 LLM API 调用
 - 如果达到 25 次工具调用限制，用户点击 "Continue" 按钮会开始一个**新的 request**
 
-### 2.4 "Continue" 按钮与 AskQuestion 的区别
+### 2.4 什么操作算新 Request
 
-这里有一个与 durable-request skill 直接相关的细微差异：
-
-| 机制 | 是否算新 request | 说明 |
+| 操作 | 是否算新 request | 说明 |
 |------|-----------------|------|
 | Agent 在一个回合内执行工具调用 | 否 | 同一个 request 内的连续工具调用 |
 | 达到工具限制后点击 "Continue" | **是** | 开始新 request，消耗额外额度 |
-| `AskQuestion` 工具阻塞等待用户 | **否** | 仍在同一个 request 内 |
 | 用户发送新的聊天消息 | **是** | 全新的 request |
-
-**这就是 durable-request 的核心价值所在**：通过 `AskQuestion` 阻塞而非结束回合，后续操作都在**同一个 request** 中完成，不消耗额外额度。如果改用"文本选项 + 用户回复"的方式（如 Copilot 移植版），每次用户回复都是一个新 request。
 
 ### 2.5 Context 对费用的影响
 
@@ -274,40 +269,7 @@ DeepSeek 的缓存定价差异极大：
 
 ---
 
-## 7. "Request" 与 durable-request 的关系
-
-理解了各平台的计费机制后，可以更深入地理解 durable-request 这个 Cursor Skill 的经济意义：
-
-### 7.1 在 Cursor 中
-
-durable-request 通过 `AskQuestion` 让 Agent 在**同一个回合**中循环执行多个任务。由于 Cursor 按 token 计费：
-
-- **好处：** 对话历史在同一 request 中积累，后续轮次的系统提示和对话前缀被缓存（$0.25/M vs $1.25/M），比开新 request 便宜
-- **代价：** 随着循环轮次增加，上下文越来越长，每轮的 token 消耗递增
-- **盈亏平衡点：** 当上下文增长带来的额外 token 成本超过了缓存节省时，开新 request 反而更便宜
-
-粗略估算：如果一个 request 的系统提示 + 上下文约 5K tokens，每轮新增 2K tokens 对话，在缓存命中率高的情况下，大约循环 15-20 轮后，单个 request 的上下文会膨胀到 35K+ tokens。此时每轮的边际成本开始接近新开 request 的固定成本。
-
-### 7.2 在 GitHub Copilot 中
-
-Copilot 当前按 request 计费，durable-request 的移植版本（文本选项方式）每轮用户回复都算一个新的 premium request。这意味着：
-
-- 5 轮交互 = 5 个 premium requests（可能乘以模型倍率）
-- Free 用户的 50 次/月配额可能很快耗尽
-
-但 2026.06 后 Copilot 转向 token-based，这个问题会自然缓解——与 Cursor 类似，同一对话的后续轮次会享受缓存优惠。
-
-### 7.3 在纯 API 平台（智谱/DeepSeek）中
-
-如果你在这些平台上自建 Agent，durable-request 的"同一 request 持久循环"概念不直接适用。但理解 token 计费和缓存机制可以帮助你优化 Agent 的设计：
-
-- 保持对话前缀稳定以最大化缓存命中（特别是 DeepSeek 的 120x 缓存优惠）
-- 控制工具调用次数以减少上下文膨胀
-- 适时"总结并重置"对话以控制 token 增长
-
----
-
-## 8. 总结
+## 7. 总结
 
 ### 核心概念
 
