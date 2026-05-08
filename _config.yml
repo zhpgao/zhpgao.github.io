@@ -1,0 +1,6 @@
+title: zhpgao's Blog
+description: Notes on AI, validation, and engineering
+theme: minima
+markdown: kramdown
+plugins:
+  - jekyll-feed
