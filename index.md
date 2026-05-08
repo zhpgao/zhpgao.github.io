@@ -3,4 +3,6 @@ layout: home
 title: Home
 ---
 
-Welcome to zhpgao's blog. Here you'll find notes on AI, validation engineering, and more.
+Embedded & firmware engineer writing about AI accelerators, developer tools, and engineering notes.
+
+[About me](/about/) | [GitHub](https://github.com/zhpgao)
