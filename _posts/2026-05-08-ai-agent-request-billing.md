@@ -21,8 +21,8 @@ tags: [cursor, copilot, deepseek, zhipu, pricing]
 
 | 范式 | 代表 | 计量单位 | 特点 |
 |------|------|---------|------|
-| **Request-based** | Cursor (Auto)、GitHub Copilot (2025-2026) | 次数 / 请求 | 简单直观，但不反映实际资源消耗差异 |
-| **Token-based** | Cursor (API pool)、智谱、DeepSeek、GitHub Copilot (2026.06+) | Token 数 | 精确反映消耗，但用户难以预估费用 |
+| **Request-based** | GitHub Copilot (截至 2026.05) | 次数 / 请求 | 简单直观，但不反映实际资源消耗差异 |
+| **Token-based** | Cursor、智谱、DeepSeek、GitHub Copilot (2026.06+) | Token 数 | 精确反映消耗，但用户难以预估费用 |
 
 行业趋势是从 request-based 向 token-based 迁移，因为 Agent 模式下单个请求的复杂度差异极大——一个简单问答可能消耗 1K tokens，而一个复杂的代码重构可能消耗 100K+ tokens。
 
@@ -252,7 +252,7 @@ DeepSeek 的缓存定价差异极大：
 | 维度 | Cursor | GitHub Copilot (当前) | 智谱 GLM | DeepSeek V4 |
 |------|--------|---------------------|---------|-------------|
 | **计费单位** | Token | Premium Request | Token | Token |
-| **"Request" 概念** | 有（用户消息为界） | 有（用户 prompt 为界） | 无 | 无 |
+| **"Request" 概念** | 无（纯 token 计费） | 有（用户 prompt 为界） | 无 | 无 |
 | **工具调用计费** | 按 token 累计 | Agent 自主调用不计费 | 独立 API 调用 | 独立 API 调用 |
 | **缓存优惠** | 有（$0.25 vs $1.25/M） | 未公开 | 无 | 有（最高 120x 差异） |
 | **模型倍率** | 无（Auto 固定费率） | 有（1x~20x） | 无（每模型独立定价） | 无 |
@@ -265,9 +265,9 @@ DeepSeek 的缓存定价差异极大：
 
 ### 核心概念
 
-1. **Request** 是 AI 编程助手的计费抽象——一次用户交互（可能包含多次内部 LLM 调用和工具调用）
+1. **Request** 是部分 AI 编程助手（如 GitHub Copilot）的计费抽象——一次用户交互算一个 request。但 Cursor 等平台已经摒弃了这种方式，改为纯 token 计费
 2. **Token** 是底层 LLM 的计费单位——实际消耗的计算资源度量
-3. 行业正从 request-based 向 token-based 迁移，因为 Agent 时代下单个 request 的复杂度差异过大
+3. 行业正从 request-based 向 token-based 迁移，因为 Agent 时代下不同交互的复杂度差异过大——一个简单问答和一个需要多次工具调用的重构任务，资源消耗天差地别
 4. **缓存**是降低成本的关键杠杆——重复的上下文前缀可以享受 5x~120x 的价格优惠
 
 ### 选型建议
