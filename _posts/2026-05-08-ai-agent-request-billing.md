@@ -21,8 +21,8 @@ tags: [cursor, copilot, deepseek, zhipu, pricing]
 
 | 范式 | 代表 | 计量单位 | 特点 |
 |------|------|---------|------|
-| **Request-based** | GitHub Copilot (截至 2026.05) | 次数 / 请求 | 简单直观，但不反映实际资源消耗差异 |
-| **Token-based** | Cursor、智谱、DeepSeek、GitHub Copilot (2026.06+) | Token 数 | 精确反映消耗，但用户难以预估费用 |
+| **Request-based** | Cursor (legacy 计划)、GitHub Copilot (截至 2026.05) | 次数 / 请求 | 简单直观，但不反映实际资源消耗差异 |
+| **Token-based** | Cursor (新计划)、智谱、DeepSeek、GitHub Copilot (2026.06+) | Token 数 | 精确反映消耗，但用户难以预估费用 |
 
 行业趋势是从 request-based 向 token-based 迁移，因为 Agent 模式下单个请求的复杂度差异极大——一个简单问答可能消耗 1K tokens，而一个复杂的代码重构可能消耗 100K+ tokens。
 
@@ -30,33 +30,21 @@ tags: [cursor, copilot, deepseek, zhipu, pricing]
 
 ## 2. Cursor 的计费机制
 
-### 2.1 双池模型
+Cursor 目前有**两种计费模式并存**：新的 token-based 计划和仍在使用的 legacy request-based 计划。
 
-Cursor 从 2025 年 5 月起引入了统一的 token-based 计费系统，分为两个独立的使用池：
+### 2.1 新计划：Token-Based（当前默认）
 
-#### Auto + Composer 池
+2025 年下半年起，Cursor 新注册用户默认采用 token-based 计费，分为两个使用池：
 
-| 项目 | 说明 |
+**Auto 模式**（固定费率，不随底层模型变化）：
+
+| 项目 | 费率 |
 |------|------|
-| 适用场景 | 日常 Agent 编码 |
-| 定价 | 固定费率，不随底层模型变化 |
 | 输入 token | $1.25 / 1M tokens（含 cache write） |
 | 输出 token | $6.00 / 1M tokens |
 | 缓存读取 | $0.25 / 1M tokens |
 
-Auto 模式会自动选择模型（可能是 Claude Sonnet、GPT-4o 等），但无论选了哪个，收费费率都是固定的。这是 Cursor 鼓励用户使用的默认模式。
-
-#### API 池
-
-| 项目 | 说明 |
-|------|------|
-| 适用场景 | 需要特定高端模型 |
-| 定价 | 按所选模型的 API 公开费率计费 |
-| 附加费 | Teams 用户额外 $0.25/1M tokens（Cursor Token Rate，覆盖代码索引、语义搜索等基础设施） |
-
-选择 Premium（最强模型）或手动指定特定模型时走 API 池。
-
-### 2.2 订阅计划与包含额度
+**Premium / 指定模型**（按所选模型的 API 公开费率计费）：选择特定模型时走 API 池。
 
 | 计划 | 月费 | 包含 API 额度 |
 |------|------|--------------|
@@ -65,11 +53,29 @@ Auto 模式会自动选择模型（可能是 Claude Sonnet、GPT-4o 等），但
 | Pro+ | $60/月 | $70 |
 | Ultra | $200/月 | $400 |
 
-超出包含额度后，如果开启了 on-demand（按需计费），会按 API 费率继续计费，无加价。
+在 token-based 计划下，**不按消息条数收费**——你在一次会话中发 1 条消息还是 100 条消息，费用纯粹由实际消耗的 token 总量决定。
 
-### 2.3 一条消息背后的 Token 消耗
+### 2.2 Legacy 计划：Request-Based（500 次/月）
 
-Cursor 是纯 **token-based** 计费，不按"消息条数"收费。但理解一条消息内部的 token 消耗结构很重要：
+部分早期用户和企业用户仍在使用 legacy request-based 计划：
+
+- **Pro（旧版）：** 500 fast requests/月，超出后回退到 slow mode（排队处理）
+- **Teams（旧版）：** 按用户分配 request 额度
+
+**什么算 1 个 request：**
+
+| 操作 | 是否消耗 request | 说明 |
+|------|-----------------|------|
+| 用户发送一条消息 | **是（1 个 request）** | 每次按"发送"都算 1 个 request |
+| Agent 自动执行的工具调用 | 否 | 包含在当前 request 内 |
+| 达到工具调用上限后点 "Continue" | **是** | 算一个新的 request |
+| Tab 代码补全 | 否 | 单独计数，不消耗 request |
+
+**核心结论：在 request-based 计划中，你在一次会话中发了 N 条消息，就消耗 N 个 request。** 每条消息内部无论 Agent 调用了多少次工具，都只算 1 个 request。
+
+### 2.3 一条消息的内部处理流程
+
+无论哪种计费模式，一条消息内部的处理流程是一样的：
 
 ```
 用户发送一条消息
@@ -98,20 +104,20 @@ Cursor 构建系统提示
 ```
 
 **关键点：**
-- 每次工具调用都会重新发送**完整上下文**（系统提示 + 对话历史 + 工具结果），所以多次工具调用会让 token 消耗成倍膨胀
-- 用户在同一个对话窗口中发送多条消息不会按"次数"收费，而是按每条消息处理过程中实际消耗的 token 总量计费
-- 随着对话持续，对话历史越来越长，后续消息的 token 消耗也会递增（因为每次都要携带完整对话历史）
+- 每次工具调用都会重新发送**完整上下文**，多次工具调用会让 token 消耗成倍膨胀
+- 随着对话持续，对话历史越来越长，后续消息的 token 消耗（或处理时间）也会递增
+- 在 token-based 计划中，这直接影响费用；在 request-based 计划中，这影响响应速度
 
 ### 2.4 Context 对费用的影响
 
-Token 计费意味着上下文（context）大小直接影响费用：
+对于 token-based 计划，上下文大小直接影响费用：
 
-| 因素 | 对 token 消耗的影响 |
-|------|-------------------|
+| 因素 | 影响 |
+|------|------|
 | 对话长度 | 每轮都发送完整对话历史，越长越贵 |
 | 打开的文件数量 | 自动附加的文件内容增加输入 tokens |
 | @引用的文件/文件夹 | 显式引用的内容全部计入输入 tokens |
-| Skill/Instruction 文件 | 注入到系统提示中，每次调用都重复计费 |
+| Skill/Instruction 文件 | 注入到系统提示中，每次调用都重复计入 |
 | 工具调用次数 | 每次工具调用重新发送完整上下文 |
 | 缓存命中率 | 缓存读取费率（$0.25/M）远低于非缓存读取（$1.25/M） |
 
@@ -251,8 +257,8 @@ DeepSeek 的缓存定价差异极大：
 
 | 维度 | Cursor | GitHub Copilot (当前) | 智谱 GLM | DeepSeek V4 |
 |------|--------|---------------------|---------|-------------|
-| **计费单位** | Token | Premium Request | Token | Token |
-| **"Request" 概念** | 无（纯 token 计费） | 有（用户 prompt 为界） | 无 | 无 |
+| **计费单位** | Token（新）/ Request（legacy） | Premium Request | Token | Token |
+| **"Request" 概念** | Legacy 有（每条消息 = 1 request）；新计划无 | 有（用户 prompt 为界） | 无 | 无 |
 | **工具调用计费** | 按 token 累计 | Agent 自主调用不计费 | 独立 API 调用 | 独立 API 调用 |
 | **缓存优惠** | 有（$0.25 vs $1.25/M） | 未公开 | 无 | 有（最高 120x 差异） |
 | **模型倍率** | 无（Auto 固定费率） | 有（1x~20x） | 无（每模型独立定价） | 无 |
@@ -265,7 +271,7 @@ DeepSeek 的缓存定价差异极大：
 
 ### 核心概念
 
-1. **Request** 是部分 AI 编程助手（如 GitHub Copilot）的计费抽象——一次用户交互算一个 request。但 Cursor 等平台已经摒弃了这种方式，改为纯 token 计费
+1. **Request** 是部分平台的计费抽象——用户每发一条消息算一个 request（GitHub Copilot 当前、Cursor legacy 计划）。Cursor 新计划已转为纯 token 计费
 2. **Token** 是底层 LLM 的计费单位——实际消耗的计算资源度量
 3. 行业正从 request-based 向 token-based 迁移，因为 Agent 时代下不同交互的复杂度差异过大——一个简单问答和一个需要多次工具调用的重构任务，资源消耗天差地别
 4. **缓存**是降低成本的关键杠杆——重复的上下文前缀可以享受 5x~120x 的价格优惠
